@@ -6,7 +6,7 @@ __pycache__/
 *.egg-info/
 *.tmp
 .env
-.venv
+.venv/
 .run/
 logs/
 temp/

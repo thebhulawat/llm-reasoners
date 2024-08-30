@@ -48,6 +48,9 @@ class MCTSNode(Generic[State, Action, Example]):
         else:
             self.depth = parent.depth + 1
 
+    def __str__(self):
+        return f"MCTSNode(id={self.id}, state={self.state}, action={self.action}, reward={self.reward}, is_terminal={self.is_terminal})"
+
     # noinspection PyPep8Naming
     @property
     def Q(self) -> float:
@@ -120,7 +123,7 @@ class MCTS(SearchAlgorithm, Generic[State, Action, Example]):
                  n_iters: int = 10,
                  cum_reward: Callable[[list[float]], float] = sum,
                  calc_q: Callable[[list[float]], float] = np.mean,
-                 simulate_strategy: str | Callable[[list[float]], int] = 'max',
+                 simulate_strategy: str | Callable[[list[float]], int] = 'random',
                  output_strategy: str = 'max_reward',
                  uct_with_fast_reward: bool = True,
                  aggregator: Optional[MCTSAggregation] = None,
@@ -178,7 +181,9 @@ class MCTS(SearchAlgorithm, Generic[State, Action, Example]):
 
     def iterate(self, node: MCTSNode) -> list[MCTSNode]:
         path = self._select(node)
+        print(path[-1])
         if not self._is_terminal_with_depth_limit(path[-1]):
+            print("inside terminal")
             self._expand(path[-1])
             self._simulate(path)
         cum_reward = self._back_propagate(path)
@@ -220,15 +225,19 @@ class MCTS(SearchAlgorithm, Generic[State, Action, Example]):
             # reward is calculated after the state is updated, so that the
             # information can be cached and passed from the world model
             # to the reward function with **aux without repetitive computation
-            node.reward, node.reward_details = self.search_config. \
-                reward(node.parent.state, node.action, **node.fast_reward_details, **aux)
+            node.reward, node.reward_details = self.search_config.reward(node.parent.state, node.action, **node.fast_reward_details, **aux)
             node.is_terminal = self.world_model.is_terminal(node.state)
 
         if node.is_terminal:
             return
 
         children = []
+        print("inside expand")
+        print(node.state)
         actions = self.search_config.get_actions(node.state)
+        print("Inside actions")
+        print(actions)
+        
         for action in actions:
             fast_reward, fast_reward_details = self.search_config.fast_reward(node.state, action)
             child = MCTSNode(state=None, action=action, parent=node,
@@ -255,6 +264,7 @@ class MCTS(SearchAlgorithm, Generic[State, Action, Example]):
             rewards.append(node.reward)
             cum_reward = self.cum_reward(rewards[::-1])
             node.cum_rewards.append(cum_reward)
+            cum_reward = 1 - cum_reward
         return cum_reward
 
     def _dfs_max_reward(self, path: list[MCTSNode]) -> tuple[float, list[MCTSNode]]:
@@ -275,7 +285,9 @@ class MCTS(SearchAlgorithm, Generic[State, Action, Example]):
         if self.output_trace_in_each_iter:
             self.trace_in_each_iter = []
 
-        for _ in trange(self.n_iters, disable=self.disable_tqdm, desc='MCTS iteration', leave=False):
+        for iter in trange(self.n_iters, disable=self.disable_tqdm, desc='MCTS iteration', leave=False):
+            print(f"-----iter: {iter}----")
+            print(self.root)
             path = self.iterate(self.root)
             if self.output_trace_in_each_iter:
                 self.trace_in_each_iter.append(deepcopy(path))
@@ -313,6 +325,7 @@ class MCTS(SearchAlgorithm, Generic[State, Action, Example]):
         else:
             terminal_state = self._output_iter[-1].state
             trace = [node.state for node in self._output_iter], [node.action for node in self._output_iter[1:]]
+            
         if self.output_trace_in_each_iter:
             trace_in_each_iter = self.trace_in_each_iter
             tree_state_after_each_iter = [trace[0] for trace in trace_in_each_iter]

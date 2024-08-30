@@ -1,22 +1,23 @@
-
 from typing import List, Tuple
+
+
 from reasoners.algorithm import MCTS 
 from reasoners.base import WorldModel, SearchConfig, Reasoner
 
-
 class LinearGameState:
-    def __init__(self, position: int, max_position: int):
+    def __init__(self, position: int, max_position: int, moves: int):
         self.position = position
         self.max_position = max_position
+        self.moves = moves
 
     def __str__(self):
-        return f"Position: {self.position} / {self.max_position}"
+        return f"Position: {self.position} / {self.max_position}, Moves: {self.moves}"
 
     def __eq__(self, other):
-        return self.position == other.position and self.max_position == other.max_position
+        return self.position == other.position and self.max_position == other.max_position and self.moves == other.moves
 
     def __hash__(self):
-        return hash((self.position, self.max_position))
+        return hash((self.position, self.max_position, self.moves))
 
 class LinearGameAction:
     def __init__(self, move: int):
@@ -33,11 +34,11 @@ class LinearGameAction:
 
 class LinearGameWorldModel(WorldModel[LinearGameState, LinearGameAction, None]):
     def init_state(self) -> LinearGameState:
-        return LinearGameState(0, 10)  # Start at 0, goal is 10
+        return LinearGameState(0, 10, 0)  # Start at 0, goal is 10, 0 moves taken
 
     def step(self, state: LinearGameState, action: LinearGameAction) -> Tuple[LinearGameState, dict]:
         new_position = min(state.position + action.move, state.max_position)
-        return LinearGameState(new_position, state.max_position), {}
+        return LinearGameState(new_position, state.max_position, state.moves + 1), {}
 
     def is_terminal(self, state: LinearGameState) -> bool:
         return state.position == state.max_position
@@ -49,14 +50,14 @@ class LinearGameSearchConfig(SearchConfig[LinearGameState, LinearGameAction, Non
     def reward(self, state: LinearGameState, action: LinearGameAction, **kwargs) -> Tuple[float, dict]:
         new_state, _ = LinearGameWorldModel().step(state, action)
         if new_state.position == new_state.max_position:
-            return 1.0, {}  # Reached the goal
+            return 1.0 , {}  # Reward is inverse of number of moves
         return 0.0, {}  # Not at goal yet
 
 class LinearGame:
     def __init__(self):
         self.world_model = LinearGameWorldModel()
         self.search_config = LinearGameSearchConfig()
-        self.mcts = MCTS(n_iters=1000, depth_limit=10)
+        self.mcts = MCTS(n_iters=10000, depth_limit=10)  # Increased iterations for better search
         self.reasoner = Reasoner(self.world_model, self.search_config, self.mcts)
 
     def play(self):
@@ -65,7 +66,6 @@ class LinearGame:
         print("Try to reach position 10 in the fewest moves.")
         print("You can move 1, 2, or 3 steps at a time.")
 
-        moves = 0
         while not self.world_model.is_terminal(state):
             print(f"\nCurrent {state}")
             
@@ -77,12 +77,11 @@ class LinearGame:
 
             action = result.trace[1][0]
             state, _ = self.world_model.step(state, action)
-            moves += 1
 
             print(f"AI chose: {action}")
-            print(f"MCTS stats: Reward={result.cum_reward:.2f}, Depth={len(result.trace[1])}")
+            print(f"MCTS stats: Reward={result.cum_reward:.4f}, Depth={len(result.trace[1])}")
 
-        print(f"\nGame Over! You reached the goal in {moves} moves.")
+        print(f"\nGame Over! You reached the goal in {state.moves} moves.")
 
 if __name__ == "__main__":
     game = LinearGame()
